@@ -1,5 +1,4 @@
 let mix = require('laravel-mix');
-let ImageminPlugin = require('imagemin-webpack-plugin').default;
 
 mix.browserSync({
 	proxy: 'https://axeptio.ddev.site',
@@ -13,15 +12,7 @@ mix.browserSync({
 });
 
 mix.webpackConfig({
-	plugins: [
-		new ImageminPlugin({
-			// disable: process.env.NODE_ENV !== 'production', // Disable during development
-			pngquant: {
-				quality: '95-100',
-			},
-			test: /\.(jpe?g|png|gif|svg)$/i,
-		}),
-	]
+	plugins: []
 })
 
 /*
