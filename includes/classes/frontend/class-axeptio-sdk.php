@@ -13,6 +13,7 @@ use Axeptio\Plugin\Models\Plugins;
 use Axeptio\Plugin\Models\Project_Versions;
 use Axeptio\Plugin\Models\Sdk;
 use Axeptio\Plugin\Models\Settings;
+use Axeptio\Plugin\Models\i18n;
 use Axeptio\Plugin\Module;
 use function Axeptio\Plugin\get_relative_path;
 use function Axeptio\Plugin\get_sdk_settings;
@@ -104,14 +105,6 @@ class Axeptio_Sdk extends Module {
 		wp_localize_script( 'axeptio/sdk-script', 'Axeptio_SDK', $settings );
 		wp_localize_script( 'axeptio/sdk-script', 'axeptioWordpressVendors', $wordpress_vendors );
 		wp_localize_script( 'axeptio/sdk-script', 'axeptioWordpressSteps', Axeptio_Steps::all() );
-		wp_localize_script(
-			'axeptio/sdk-script',
-			'axeptioAjax',
-			array(
-				'wp'  => array( 'relativePath' => get_relative_path( XPWP_PATH, ABSPATH ) ),
-				'url' => XPWP_URL . '/ajax.php',
-			)
-			);
 
 		$sdk_script = \Axeptio\Plugin\get_template_part( 'frontend/sdk', array(), false );
 		preg_match( '/<script[^>]*>(.*?)<\/script>/is', $sdk_script, $matches );
@@ -132,6 +125,26 @@ class Axeptio_Sdk extends Module {
 	}
 
 	/**
+	 * Get widget fields for current language
+	 *
+	 * @return array Widget fields configuration
+	 */
+	private function get_widget_fields(): array {
+		$current_language = i18n::get_current_language();
+		$suffix = $current_language ? "_{$current_language}" : '';
+
+		$fields = [
+			'widget_title'       => Settings::get_option("widget_title{$suffix}", ''),
+			'widget_subtitle'    => Settings::get_option("widget_subtitle{$suffix}", ''),
+			'widget_description' => Settings::get_option("widget_description{$suffix}", ''),
+		];
+
+		return array_filter($fields, function($value) {
+			return !empty($value);
+		});
+	}
+
+	/**
 	 * Retrieve the SDK settings.
 	 *
 	 * @return array|false Settings of the SDK.
@@ -148,9 +161,9 @@ class Axeptio_Sdk extends Module {
 		$widget_image            = Settings::get_option( 'widget_image', '' );
 		$widget_disable_bg_image = Settings::get_option( 'widget_disable_paint', '' );
 
-		if ( $widget_image === 'disabled' ) {
+		if ( 'disabled' === $widget_image ) {
 			$widget_image_settings = false;
-		} elseif ( $widget_image !== '' ) {
+		} elseif ( '' !== $widget_image ) {
 			$widget_image_settings = $widget_image;
 		} else {
 			$widget_image_settings = $widget_image;
@@ -160,12 +173,17 @@ class Axeptio_Sdk extends Module {
 		$google_consent_mode_params = Settings::get_option(
 			'google_consent_params',
 			array(
-				'analytics_storage'  => false,
-				'ad_storage'         => false,
-				'ad_user_data'       => false,
-				'ad_personalization' => false,
+				'analytics_storage'       => false,
+				'ad_storage'              => false,
+				'ad_user_data'            => false,
+				'ad_personalization'      => false,
+				'functionality_storage'   => false,
+				'personalization_storage' => false,
+				'security_storage'        => false,
 			)
 		);
+
+		$gtm_events = Settings::get_option( 'gtm_events', 'true' );
 
 		if ( ! $sdk_active || ( ! $client_id && ! $cookies_version ) ) {
 			return false;
@@ -176,15 +194,21 @@ class Axeptio_Sdk extends Module {
 			'platform'                => 'plugin-wordpress',
 			'sendDatas'               => $disable_send_datas,
 			'enableGoogleConsentMode' => $google_consent_mode,
+			'triggerGTMEvents'        => $gtm_events,
 			'googleConsentMode'       => array(
 				'default' => array(
-					'analytics_storage'  => isset( $google_consent_mode_params['analytics_storage'] ) && '1' === $google_consent_mode_params['analytics_storage'] ? 'granted' : 'denied',
-					'ad_storage'         => isset( $google_consent_mode_params['ad_storage'] ) && '1' === $google_consent_mode_params['ad_storage'] ? 'granted' : 'denied',
-					'ad_user_data'       => isset( $google_consent_mode_params['ad_user_data'] ) && '1' === $google_consent_mode_params['ad_user_data'] ? 'granted' : 'denied',
-					'ad_personalization' => isset( $google_consent_mode_params['ad_personalization'] ) && '1' === $google_consent_mode_params ? 'granted' : 'denied',
+					'analytics_storage'       => isset( $google_consent_mode_params['analytics_storage'] ) && '1' === $google_consent_mode_params['analytics_storage'] ? 'granted' : 'denied',
+					'ad_storage'              => isset( $google_consent_mode_params['ad_storage'] ) && '1' === $google_consent_mode_params['ad_storage'] ? 'granted' : 'denied',
+					'ad_user_data'            => isset( $google_consent_mode_params['ad_user_data'] ) && '1' === $google_consent_mode_params['ad_user_data'] ? 'granted' : 'denied',
+					'ad_personalization'      => isset( $google_consent_mode_params['ad_personalization'] ) && '1' === $google_consent_mode_params['ad_personalization'] ? 'granted' : 'denied',
+					'functionality_storage'   => isset( $google_consent_mode_params['functionality_storage'] ) && '1' === $google_consent_mode_params['functionality_storage'] ? 'granted' : 'denied',
+					'personalization_storage' => isset( $google_consent_mode_params['personalization_storage'] ) && '1' === $google_consent_mode_params['personalization_storage'] ? 'granted' : 'denied',
+					'security_storage'        => isset( $google_consent_mode_params['security_storage'] ) && '1' === $google_consent_mode_params['security_storage'] ? 'granted' : 'denied',
 				),
 			),
 		);
+
+		$sdk_settings = array_merge($sdk_settings, $this->get_widget_fields());
 
 		if ( '' !== $cookies_version ) {
 			$sdk_settings['cookiesVersion'] = $cookies_version;
@@ -203,7 +227,7 @@ class Axeptio_Sdk extends Module {
 		}
 
 		if ( $api_url && '' !== $api_url ) {
-			$sdk_settings['apiUrl'] = $api_url;
+			$sdk_settings['postConsentUrl'] = $api_url;
 		}
 
 		return apply_filters(
